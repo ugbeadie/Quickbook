@@ -449,10 +449,11 @@ export async function getTransactionsCategory(
     let startDate: Date;
     let endDate: Date;
 
+    // Determine period boundaries in local time
     switch (period) {
       case "weekly":
-        startDate = startOfWeek(currentDate);
-        endDate = endOfWeek(currentDate);
+        startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
+        endDate = endOfWeek(currentDate, { weekStartsOn: 0 });
         break;
       case "monthly":
         startDate = startOfMonth(currentDate);
@@ -464,7 +465,7 @@ export async function getTransactionsCategory(
         break;
     }
 
-    // Get transactions for the category
+    // Fetch all transactions in period
     const rawTransactions = await prisma.transaction.findMany({
       where: {
         category,
@@ -474,12 +475,9 @@ export async function getTransactionsCategory(
           lte: endDate,
         },
       },
-      orderBy: {
-        date: "desc",
-      },
+      orderBy: { date: "asc" },
     });
 
-    // Transform transactions to match Transaction interface exactly
     const transactions: Transaction[] = rawTransactions.map((t) => ({
       id: t.id,
       type: t.type as "income" | "expense",
@@ -492,10 +490,24 @@ export async function getTransactionsCategory(
       updatedAt: new Date(t.updatedAt),
     }));
 
+    // Build chart data safely in JS
     let chartData: { period: string; amount: number }[] = [];
 
-    if (period === "monthly") {
-      // Fetch all months in one query with aggregation
+    if (period === "weekly") {
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      const dayMap = new Map<string, number>();
+      days.forEach((d) => dayMap.set(format(d, "EEE"), 0));
+
+      transactions.forEach((t) => {
+        const key = format(new Date(t.date), "EEE");
+        dayMap.set(key, (dayMap.get(key) || 0) + t.amount);
+      });
+
+      chartData = Array.from(dayMap.entries()).map(([period, amount]) => ({
+        period,
+        amount,
+      }));
+    } else if (period === "monthly") {
       const months = eachMonthOfInterval({
         start: new Date(
           currentDate.getFullYear(),
@@ -504,32 +516,12 @@ export async function getTransactionsCategory(
         ),
         end: currentDate,
       });
-
-      const monthsData = await prisma.transaction.groupBy({
-        by: ["date"],
-        where: {
-          category,
-          type,
-          date: {
-            gte: startOfMonth(months[0]),
-            lte: endOfMonth(months[months.length - 1]),
-          },
-        },
-        _sum: {
-          amount: true,
-        },
-      });
-
-      // Process the aggregated data
       const monthMap = new Map<string, number>();
-      months.forEach((month) => {
-        monthMap.set(format(month, "MMM"), 0);
-      });
+      months.forEach((m) => monthMap.set(format(m, "MMM"), 0));
 
-      monthsData.forEach((item) => {
-        const monthKey = format(new Date(item.date), "MMM");
-        const current = monthMap.get(monthKey) || 0;
-        monthMap.set(monthKey, current + Number(item._sum.amount || 0));
+      transactions.forEach((t) => {
+        const key = format(new Date(t.date), "MMM");
+        monthMap.set(key, (monthMap.get(key) || 0) + t.amount);
       });
 
       chartData = Array.from(monthMap.entries()).map(([period, amount]) => ({
@@ -537,93 +529,28 @@ export async function getTransactionsCategory(
         amount,
       }));
     } else if (period === "annually") {
-      // Fetch all years in one query
       const years = eachYearOfInterval({
         start: new Date(currentDate.getFullYear() - 4, 0, 1),
         end: currentDate,
       });
-
-      const yearsData = await prisma.transaction.groupBy({
-        by: ["date"],
-        where: {
-          category,
-          type,
-          date: {
-            gte: startOfYear(years[0]),
-            lte: endOfYear(years[years.length - 1]),
-          },
-        },
-        _sum: {
-          amount: true,
-        },
-      });
-
       const yearMap = new Map<string, number>();
-      years.forEach((year) => {
-        yearMap.set(format(year, "yyyy"), 0);
-      });
+      years.forEach((y) => yearMap.set(format(y, "yyyy"), 0));
 
-      yearsData.forEach((item) => {
-        const yearKey = format(new Date(item.date), "yyyy");
-        const current = yearMap.get(yearKey) || 0;
-        yearMap.set(yearKey, current + Number(item._sum.amount || 0));
+      transactions.forEach((t) => {
+        const key = format(new Date(t.date), "yyyy");
+        yearMap.set(key, (yearMap.get(key) || 0) + t.amount);
       });
 
       chartData = Array.from(yearMap.entries()).map(([period, amount]) => ({
         period,
         amount,
       }));
-    } else {
-      // Weekly - fetch all days in one query
-      const days = eachDayOfInterval({
-        start: new Date(currentDate.getTime() - 6 * 24 * 60 * 60 * 1000),
-        end: currentDate,
-      });
-
-      const daysData = await prisma.transaction.groupBy({
-        by: ["date"],
-        where: {
-          category,
-          type,
-          date: {
-            gte: startOfWeek(
-              new Date(currentDate.getTime() - 6 * 24 * 60 * 60 * 1000)
-            ),
-            lte: endOfWeek(currentDate),
-          },
-        },
-        _sum: {
-          amount: true,
-        },
-      });
-
-      const dayMap = new Map<string, number>();
-      days.forEach((day) => {
-        dayMap.set(format(day, "EEE"), 0);
-      });
-
-      daysData.forEach((item) => {
-        const dayKey = format(new Date(item.date), "EEE");
-        const current = dayMap.get(dayKey) || 0;
-        dayMap.set(dayKey, current + Number(item._sum.amount || 0));
-      });
-
-      chartData = Array.from(dayMap.entries()).map(([period, amount]) => ({
-        period,
-        amount,
-      }));
     }
 
-    return {
-      transactions,
-      chartData,
-    };
+    return { transactions, chartData };
   } catch (error) {
     console.error("Error fetching category transactions:", error);
-    return {
-      transactions: [],
-      chartData: [],
-    };
+    return { transactions: [], chartData: [] };
   }
 }
 
