@@ -81,7 +81,17 @@ export function CategoryDetail({
       }),
     });
 
-    return res.json();
+    const data = await res.json();
+
+    // 🔥 FIX: restore Date objects
+    data.transactions = data.transactions.map((t: any) => ({
+      ...t,
+      date: new Date(t.date),
+      createdAt: new Date(t.createdAt),
+      updatedAt: new Date(t.updatedAt),
+    }));
+
+    return data;
   }
 
   // Fetch category data when inputs change
