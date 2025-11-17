@@ -485,18 +485,17 @@ export async function getTransactionsCategory(
       type: t.type as "income" | "expense",
       amount: Number(t.amount),
       category: t.category,
-      description: t.description, // Keep as is (string | null)
-      imageUrl: t.imageUrl, // Keep as is (string | null)
+      description: t.description,
+      imageUrl: t.imageUrl,
       date: new Date(t.date),
       createdAt: new Date(t.createdAt),
       updatedAt: new Date(t.updatedAt),
     }));
 
-    // Generate chart data based on period
     let chartData: { period: string; amount: number }[] = [];
 
     if (period === "monthly") {
-      // Show last 6 months
+      // Fetch all months in one query with aggregation
       const months = eachMonthOfInterval({
         start: new Date(
           currentDate.getFullYear(),
@@ -506,109 +505,113 @@ export async function getTransactionsCategory(
         end: currentDate,
       });
 
-      chartData = await Promise.all(
-        months.map(async (month) => {
-          const monthStart = startOfMonth(month);
-          const monthEnd = endOfMonth(month);
+      const monthsData = await prisma.transaction.groupBy({
+        by: ["date"],
+        where: {
+          category,
+          type,
+          date: {
+            gte: startOfMonth(months[0]),
+            lte: endOfMonth(months[months.length - 1]),
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      });
 
-          const monthTransactions = await prisma.transaction.findMany({
-            where: {
-              category,
-              type,
-              date: {
-                gte: monthStart,
-                lte: monthEnd,
-              },
-            },
-          });
+      // Process the aggregated data
+      const monthMap = new Map<string, number>();
+      months.forEach((month) => {
+        monthMap.set(format(month, "MMM"), 0);
+      });
 
-          return {
-            period: format(month, "MMM"),
-            amount: monthTransactions.reduce(
-              (sum, t) => sum + Number(t.amount),
-              0
-            ),
-          };
-        })
-      );
+      monthsData.forEach((item) => {
+        const monthKey = format(new Date(item.date), "MMM");
+        const current = monthMap.get(monthKey) || 0;
+        monthMap.set(monthKey, current + Number(item._sum.amount || 0));
+      });
+
+      chartData = Array.from(monthMap.entries()).map(([period, amount]) => ({
+        period,
+        amount,
+      }));
     } else if (period === "annually") {
-      // Show last 5 years
+      // Fetch all years in one query
       const years = eachYearOfInterval({
         start: new Date(currentDate.getFullYear() - 4, 0, 1),
         end: currentDate,
       });
 
-      chartData = await Promise.all(
-        years.map(async (year) => {
-          const yearStart = startOfYear(year);
-          const yearEnd = endOfYear(year);
+      const yearsData = await prisma.transaction.groupBy({
+        by: ["date"],
+        where: {
+          category,
+          type,
+          date: {
+            gte: startOfYear(years[0]),
+            lte: endOfYear(years[years.length - 1]),
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      });
 
-          const yearTransactions = await prisma.transaction.findMany({
-            where: {
-              category,
-              type,
-              date: {
-                gte: yearStart,
-                lte: yearEnd,
-              },
-            },
-          });
+      const yearMap = new Map<string, number>();
+      years.forEach((year) => {
+        yearMap.set(format(year, "yyyy"), 0);
+      });
 
-          return {
-            period: format(year, "yyyy"),
-            amount: yearTransactions.reduce(
-              (sum, t) => sum + Number(t.amount),
-              0
-            ),
-          };
-        })
-      );
+      yearsData.forEach((item) => {
+        const yearKey = format(new Date(item.date), "yyyy");
+        const current = yearMap.get(yearKey) || 0;
+        yearMap.set(yearKey, current + Number(item._sum.amount || 0));
+      });
+
+      chartData = Array.from(yearMap.entries()).map(([period, amount]) => ({
+        period,
+        amount,
+      }));
     } else {
-      // Weekly - show last 7 days
+      // Weekly - fetch all days in one query
       const days = eachDayOfInterval({
         start: new Date(currentDate.getTime() - 6 * 24 * 60 * 60 * 1000),
         end: currentDate,
       });
 
-      chartData = await Promise.all(
-        days.map(async (day) => {
-          const dayStart = new Date(
-            day.getFullYear(),
-            day.getMonth(),
-            day.getDate(),
-            0,
-            0,
-            0
-          );
-          const dayEnd = new Date(
-            day.getFullYear(),
-            day.getMonth(),
-            day.getDate(),
-            23,
-            59,
-            59
-          );
-
-          const dayTransactions = await prisma.transaction.findMany({
-            where: {
-              category,
-              type,
-              date: {
-                gte: dayStart,
-                lte: dayEnd,
-              },
-            },
-          });
-
-          return {
-            period: format(day, "EEE"),
-            amount: dayTransactions.reduce(
-              (sum, t) => sum + Number(t.amount),
-              0
+      const daysData = await prisma.transaction.groupBy({
+        by: ["date"],
+        where: {
+          category,
+          type,
+          date: {
+            gte: startOfWeek(
+              new Date(currentDate.getTime() - 6 * 24 * 60 * 60 * 1000)
             ),
-          };
-        })
-      );
+            lte: endOfWeek(currentDate),
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      });
+
+      const dayMap = new Map<string, number>();
+      days.forEach((day) => {
+        dayMap.set(format(day, "EEE"), 0);
+      });
+
+      daysData.forEach((item) => {
+        const dayKey = format(new Date(item.date), "EEE");
+        const current = dayMap.get(dayKey) || 0;
+        dayMap.set(dayKey, current + Number(item._sum.amount || 0));
+      });
+
+      chartData = Array.from(dayMap.entries()).map(([period, amount]) => ({
+        period,
+        amount,
+      }));
     }
 
     return {

@@ -4,6 +4,8 @@ import { Lato } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/shared/header";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { CalendarProvider } from "@/contexts/CalendarContext";
+import { StatsProvider } from "@/contexts/StatsContext";
 
 const lato = Lato({
   weight: "400",
@@ -20,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={lato.className}>
         <ThemeProvider
           attribute="class"
@@ -29,7 +31,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Header />
-          {children}
+          <CalendarProvider>
+            <StatsProvider>{children}</StatsProvider>
+          </CalendarProvider>
         </ThemeProvider>
       </body>
     </html>
