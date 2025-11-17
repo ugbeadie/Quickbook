@@ -6,6 +6,7 @@ import { Header } from "@/components/shared/header";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { CalendarProvider } from "@/contexts/CalendarContext";
 import { StatsProvider } from "@/contexts/StatsContext";
+import { ToasterProvider } from "@/components/shared/ToasterProvider";
 
 const lato = Lato({
   weight: "400",
@@ -34,6 +35,7 @@ export default function RootLayout({
           <CalendarProvider>
             <StatsProvider>{children}</StatsProvider>
           </CalendarProvider>
+          <ToasterProvider />
         </ThemeProvider>
       </body>
     </html>
