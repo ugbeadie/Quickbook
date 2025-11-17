@@ -1021,6 +1021,10 @@ export async function getStatsData(
     };
   }
 }
+function normalizeToUTCDateOnly(d: Date) {
+  // convert to a Date at UTC midnight for that calendar date
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
 
 export async function getTransactionsCategory(
   category: string,
@@ -1029,32 +1033,54 @@ export async function getTransactionsCategory(
   currentDate: Date
 ): Promise<CategoryDetailData> {
   try {
+    // Normalize the incoming currentDate once — use this everywhere
+    const normalizedCurrent = normalizeToUTCDateOnly(currentDate);
+
     let startDate: Date;
     let endDate: Date;
 
-    // Determine period boundaries in local time
+    // Determine period boundaries in UTC (normalized)
     switch (period) {
       case "weekly":
-        startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
-        endDate = endOfWeek(currentDate, { weekStartsOn: 0 });
+        // NOTE: startOfWeek/endOfWeek use local rules, so run them on normalizedCurrent then normalize result
+        startDate = normalizeToUTCDateOnly(
+          startOfWeek(normalizedCurrent, { weekStartsOn: 0 })
+        );
+        endDate = normalizeToUTCDateOnly(
+          endOfWeek(normalizedCurrent, { weekStartsOn: 0 })
+        );
         break;
       case "monthly":
-        startDate = startOfMonth(currentDate);
-        endDate = endOfMonth(currentDate);
+        startDate = normalizeToUTCDateOnly(startOfMonth(normalizedCurrent));
+        endDate = normalizeToUTCDateOnly(endOfMonth(normalizedCurrent));
         break;
       case "annually":
-        startDate = startOfYear(currentDate);
-        endDate = endOfYear(currentDate);
+        startDate = normalizeToUTCDateOnly(startOfYear(normalizedCurrent));
+        endDate = normalizeToUTCDateOnly(endOfYear(normalizedCurrent));
+        break;
+      default:
+        startDate = normalizeToUTCDateOnly(
+          startOfWeek(normalizedCurrent, { weekStartsOn: 0 })
+        );
+        endDate = normalizeToUTCDateOnly(
+          endOfWeek(normalizedCurrent, { weekStartsOn: 0 })
+        );
         break;
     }
 
-    // Fetch all transactions in period
-    const normalizeDate = (d: Date) =>
-      new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    // DEBUG: (these will appear in Vercel logs)
+    console.log(
+      "[getTransactionsCategory] normalizedCurrent:",
+      normalizedCurrent.toISOString()
+    );
+    console.log(
+      "[getTransactionsCategory] startDate:",
+      startDate.toISOString(),
+      "endDate:",
+      endDate.toISOString()
+    );
 
-    startDate = normalizeDate(startDate);
-    endDate = normalizeDate(endDate);
-
+    // Fetch all transactions in period (prisma expects JS Date objects in UTC)
     const rawTransactions = await prisma.transaction.findMany({
       where: {
         category,
@@ -1099,11 +1125,11 @@ export async function getTransactionsCategory(
     } else if (period === "monthly") {
       const months = eachMonthOfInterval({
         start: new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth() - 5,
+          normalizedCurrent.getFullYear(),
+          normalizedCurrent.getMonth() - 5,
           1
         ),
-        end: currentDate,
+        end: normalizedCurrent,
       });
       const monthMap = new Map<string, number>();
       months.forEach((m) => monthMap.set(format(m, "MMM"), 0));
@@ -1119,8 +1145,8 @@ export async function getTransactionsCategory(
       }));
     } else if (period === "annually") {
       const years = eachYearOfInterval({
-        start: new Date(currentDate.getFullYear() - 4, 0, 1),
-        end: currentDate,
+        start: new Date(normalizedCurrent.getFullYear() - 4, 0, 1),
+        end: normalizedCurrent,
       });
       const yearMap = new Map<string, number>();
       years.forEach((y) => yearMap.set(format(y, "yyyy"), 0));
