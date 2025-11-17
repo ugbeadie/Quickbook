@@ -14,7 +14,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { Transaction } from "@/types/transaction";
-import { getTransactionsCategory, deleteTransaction } from "@/lib/actions";
+import { deleteTransaction } from "@/lib/actions"; // keep
 import { Spinner } from "@/components/ui/spinner";
 import { TransactionGroup } from "@/components/home/TransactionGroup";
 import TransactionForm from "@/components/calendar/TransactionForm";
@@ -68,17 +68,29 @@ export function CategoryDetail({
     );
   });
 
+  // 🔥 NEW UNIFIED FETCHER — same output as getTransactionsCategory()
+  async function fetchCategoryData() {
+    const res = await fetch("/api/transactions/category", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category,
+        type,
+        period,
+        currentDate,
+      }),
+    });
+
+    return res.json();
+  }
+
   // Fetch category data when inputs change
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const data = await getTransactionsCategory(
-          category,
-          type,
-          period,
-          currentDate
-        );
+        // replaced server action with API fetch
+        const data = await fetchCategoryData();
         setTransactions(data.transactions);
         setChartData(data.chartData);
       } catch (error) {
@@ -115,14 +127,10 @@ export function CategoryDetail({
   const handleDeleteTransaction = async (id: string) => {
     try {
       const result = await deleteTransaction(id);
+
       if (result.success) {
-        // Re-fetch after delete
-        const data = await getTransactionsCategory(
-          category,
-          type,
-          period,
-          currentDate
-        );
+        // Re-fetch using API
+        const data = await fetchCategoryData();
         setTransactions(data.transactions);
         setChartData(data.chartData);
 
@@ -148,12 +156,8 @@ export function CategoryDetail({
     setShowForm(false);
     setEditingTransaction(null);
 
-    const data = await getTransactionsCategory(
-      category,
-      type,
-      period,
-      currentDate
-    );
+    // Re-fetch using API
+    const data = await fetchCategoryData();
     setTransactions(data.transactions);
     setChartData(data.chartData);
 
