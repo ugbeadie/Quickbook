@@ -2,7 +2,10 @@
 
 [moneytrail](https://moneytrailll.vercel.app/) is an expense tracker built with Nextjs, Prisma as the ORM and styled with tailwind.
 
-* Note: The stats isn't rendering properly on the live site but works fine on the production build locally. Still debugging
+* Note: The stats isn't rendering properly on the live site but works fine on the production build locally. Still debugging but this is what the finshed result should look like.
+
+![statspage](https://github.com/ugbeadie/Quickbook/blob/main/ss1.png?raw=true)
+![statspage](https://github.com/ugbeadie/Quickbook/blob/main/ss2.png?raw=true)
 
 ## Features
 
