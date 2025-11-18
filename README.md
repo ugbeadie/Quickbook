@@ -1,3 +1,24 @@
+# MONEYTRAIL
+
+[moneytrail](https://moneytrailll.vercel.app/) is an expense tracker built with Nextjs, Prisma as the ORM and styled with tailwind.
+
+* Note: The stats isn't rendering properly on the live site but works fine on the production build locally. Still debugging
+
+## Features
+
+* Users can add, edit and delete transactions in real-time.
+* Built-in calendar for a better view of your transactions for the coreesponding day
+* A stats page for a more indepth analysis of your transactions
+
+## Walkabout
+
+* Transactions can be added, edited or deleted from the homepage or calendarpage
+* Make use of the month picker or calendar for filtering
+   
+
+### Visit [moneytrail](https://moneytrailll.vercel.app/) to view project.
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
